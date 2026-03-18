@@ -1,18 +1,57 @@
-record_cmd = "rosbag record /status /velodyne_points /scan /imu/data /jackal_velocity_controller/odom /gps/fix /gps/vel /imu/data_raw /tf /localization /move_base_simple/goal /navigation/cmd_vel /set_nav_target /set_pose"..
-    " /image_raw/compressed "..
-    " /joint_states"..
-    " /joystick"..
-    " /odom"..
-    " /spot/camera/frontright/image/compressed "..
-    " /spot/camera/frontleft/image/compressed "..
-    " /spot/camera/right/image/compressed "..
-    " /spot/camera/left/image/compressed "..
-    " /spot/camera/back/image/compressed "..
-    " /spot/camera/frontright/camera_info"..
-    " /spot/camera/frontleft/camera_info"..
-    " /spot/camera/right/camera_info"..
-    " /spot/camera/left/camera_info"..
-    " /spot/camera/back/camera_info __name:=joystick_rosbag_record&";
+-- record_cmd = "mkdir -p ~/cotnav_ws/data/bags; ros2 bag record -o ~/cotnav_ws/data/bags/$(date +%Y-%m-%d_%H-%M-%S) "..
+--     "/status "..
+--     "/autonomy_arbiter/enabled "..
+--     "/velodyne_points "..
+--     "/imu "..
+--     "/odometry "..
+--     "/tf "..
+--     "/tf_static "..
+--     "/cmd_vel "..
+--     "/joint_states "..
+--     "/joystick "..
+--     "/joy "..
+--     "/odom "..
+--     "/vectornav/imu "..
+--     "/vectornav/gps "..
+--     "/vectornav/magnetic "..
+--     "/rgb/image_raw "..
+--     "/rgb/camera_info "..
+--     "/depth_to_rgb/image_raw "..
+--     "/depth_to_rgb/camera_info "..
+--     "/depth/frontright/image/compressed "..
+--     "/depth/frontleft/image/compressed "..
+--     "/depth_registered/back/camera_info "..
+--     "/depth_registered/back/image "..
+--     "/depth_registered/frontleft/camera_info "..
+--     "/depth_registered/frontleft/image "..
+--     "/depth_registered/frontright/camera_info "..
+--     "/depth_registered/frontright/image "..
+--     "/depth_registered/left/camera_info "..
+--     "/depth_registered/left/image "..
+--     "/depth_registered/right/camera_info "..
+--     "/depth_registered/right/image "..
+--     "/spot/camera/back/camera_info > /tmp/joystick_rosbag.log 2>&1 &";
+
+record_cmd = "mkdir -p /home/ros/cotnav_ws/data/bags; ros2 bag record -o /home/ros/cotnav_ws/data/bags/$(date +%Y-%m-%d_%H-%M-%S) "..
+    "/status "..
+    "/autonomy_arbiter/enabled "..
+    "/velodyne_points "..
+    "/imu "..
+    "/odometry "..
+    "/tf "..
+    "/tf_static "..
+    "/cmd_vel "..
+    "/joint_states "..
+    "/joystick "..
+    "/joy "..
+    "/odom "..
+    "/vectornav/imu "..
+    "/vectornav/gps "..
+    "/vectornav/magnetic "..
+    "/rgb/image_raw "..
+    "/rgb/camera_info "..
+    "/depth_to_rgb/image_raw "..
+    "/depth_to_rgb/camera_info > /tmp/joystick_rosbag.log 2>&1 &";
 
 Ps4Mapping = {
     manual_button = 4;

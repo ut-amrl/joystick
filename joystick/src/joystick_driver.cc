@@ -265,18 +265,36 @@ void SetManualCommand(const vector<int32_t>& buttons,
 }
 
 void LoggingControls(const vector<int32_t>& buttons) {
-  // See if recording should start.
-  if ((int) buttons.size() >= CONFIG_left_bumper && buttons[CONFIG_left_bumper] == 1) {
-    static bool recording = false;
-    if (recording && buttons[CONFIG_record_stop_button] == 1) {
-      recording = false;
-      // In ROS 2, prefer killing the process directly if needed.
-      if (system("pkill -f joystick_rosbag_record") != 0) {
+  auto button_down = [&buttons](int idx) -> bool {
+    return idx >= 0 && idx < static_cast<int>(buttons.size()) && buttons[idx] == 1;
+  };
+
+  static bool recording = false;
+  static bool prev_start_down = false;
+  static bool prev_stop_down = false;
+
+  const bool bumper_down = button_down(CONFIG_left_bumper);
+  const bool start_down = button_down(CONFIG_record_start_button);
+  const bool stop_down = button_down(CONFIG_record_stop_button);
+  const bool start_pressed = start_down && !prev_start_down;
+  const bool stop_pressed = stop_down && !prev_stop_down;
+
+  if (bumper_down) {
+    if (recording && stop_pressed) {
+      // Stop via PID lookup and SIGINT for graceful bag close.
+      if (system("sh -lc \"ps -eo pid=,args= | "
+                 "sed -n 's/^[[:space:]]*\\([0-9][0-9]*\\)[[:space:]]\\+"
+                 "\\/usr\\/bin\\/python3[[:space:]]\\+\\/opt\\/ros\\/[^[:space:]]\\+"
+                 "\\/bin\\/ros2[[:space:]]\\+bag[[:space:]]\\+record[[:space:]]\\+-o"
+                 "[[:space:]]\\+\\/home\\/ros\\/cotnav_ws\\/data\\/bags.*/\\1/p' | "
+                 "xargs -r kill -INT >/dev/null 2>&1; exit 0\"") != 0) {
         printf("Unable to kill rosbag!\n");
       } else {
         printf("Stopped recording rosbag.\n");
+        recording = false;
       }
-    } else if (!recording && buttons[CONFIG_record_start_button] == 1) {
+      Sleep(0.5);
+    } else if (!recording && start_pressed) {
       printf("Starting recording rosbag...\n");
       if (system(CONFIG_rosbag_record_cmd.c_str()) != 0) {
         printf("Unable to record\n");
@@ -287,6 +305,9 @@ void LoggingControls(const vector<int32_t>& buttons) {
       Sleep(0.5);
     }
   }
+
+  prev_start_down = start_down;
+  prev_stop_down = stop_down;
 }
 
 int main(int argc, char** argv) {
