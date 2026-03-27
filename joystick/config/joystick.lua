@@ -38,20 +38,26 @@ record_cmd = "mkdir -p /home/ros/cotnav_ws/data/bags; ros2 bag record -o /home/r
     "/velodyne_points "..
     "/imu "..
     "/odometry "..
+    "/lio_prediction "..
+    "/robot_description "..
+    "/scan "..
     "/tf "..
     "/tf_static "..
+    "/navigation/cmd_vel "..
     "/cmd_vel "..
     "/joint_states "..
     "/joystick "..
     "/joy "..
     "/odom "..
+    "/imuodom_path "..
+    "/laser_odometry "..
     "/vectornav/imu "..
     "/vectornav/gps "..
     "/vectornav/magnetic "..
     "/rgb/image_raw "..
     "/rgb/camera_info "..
     "/depth_to_rgb/image_raw "..
-    "/depth_to_rgb/camera_info > /tmp/joystick_rosbag.log 2>&1 &";
+    "/depth_to_rgb/camera_info > /tmp/joystick_rosbag.log 2>&1";
 
 Ps4Mapping = {
     manual_button = 4;

@@ -67,8 +67,6 @@ CONFIG_INT(left_bumper, "Mapping.left_bumper");
 CONFIG_INT(record_start_button, "Mapping.record_start_button");
 CONFIG_INT(record_stop_button, "Mapping.record_stop_button");
 
-CONFIG_STRING(rosbag_record_cmd, "record_cmd");
-
 using std::string;
 using std::vector;
 using joystick::Joystick;
@@ -95,6 +93,8 @@ std::shared_ptr<rclcpp::Node> node_;
 std::string sit_service_name_ = "/sit";
 std::string stand_service_name_ = "/stand";
 bool sitting_ = false;
+bool record_button_compat_pulse_ = false;
+constexpr int kCompatRecordButtonIndex = 2;
 
 Twist ZeroTwist() {
   Twist msg;
@@ -278,36 +278,28 @@ void LoggingControls(const vector<int32_t>& buttons) {
   const bool stop_down = button_down(CONFIG_record_stop_button);
   const bool start_pressed = start_down && !prev_start_down;
   const bool stop_pressed = stop_down && !prev_stop_down;
+  const bool toggle_pressed = start_pressed || stop_pressed;
 
-  if (bumper_down) {
-    if (recording && stop_pressed) {
-      // Stop via PID lookup and SIGINT for graceful bag close.
-      if (system("sh -lc \"ps -eo pid=,args= | "
-                 "sed -n 's/^[[:space:]]*\\([0-9][0-9]*\\)[[:space:]]\\+"
-                 "\\/usr\\/bin\\/python3[[:space:]]\\+\\/opt\\/ros\\/[^[:space:]]\\+"
-                 "\\/bin\\/ros2[[:space:]]\\+bag[[:space:]]\\+record[[:space:]]\\+-o"
-                 "[[:space:]]\\+\\/home\\/ros\\/cotnav_ws\\/data\\/bags.*/\\1/p' | "
-                 "xargs -r kill -INT >/dev/null 2>&1; exit 0\"") != 0) {
-        printf("Unable to kill rosbag!\n");
-      } else {
-        printf("Stopped recording rosbag.\n");
-        recording = false;
-      }
-      Sleep(0.5);
-    } else if (!recording && start_pressed) {
-      printf("Starting recording rosbag...\n");
-      if (system(CONFIG_rosbag_record_cmd.c_str()) != 0) {
-        printf("Unable to record\n");
-      } else {
-        printf("Started recording rosbag.\n");
-        recording = true;
-      }
-      Sleep(0.5);
+  if (bumper_down && toggle_pressed) {
+    recording = !recording;
+    if (recording) {
+      printf("Started recording.\n");
+    } else {
+      printf("Stopped recording.\n");
     }
+    // Emit one-frame pulse for av_recorder compatibility.
+    record_button_compat_pulse_ = true;
+    // Sleep(0.5);
   }
 
   prev_start_down = start_down;
   prev_stop_down = stop_down;
+}
+
+bool ConsumeRecordButtonCompatPulse() {
+  const bool pulse = record_button_compat_pulse_;
+  record_button_compat_pulse_ = false;
+  return pulse;
 }
 
 int main(int argc, char** argv) {
@@ -351,6 +343,12 @@ int main(int argc, char** argv) {
     msg.header.stamp = node_->get_clock()->now();
     msg.axes = axes;
     msg.buttons = buttons;
+    if (msg.buttons.size() <= kCompatRecordButtonIndex) {
+      msg.buttons.resize(kCompatRecordButtonIndex + 1, 0);
+    }
+    if (ConsumeRecordButtonCompatPulse()) {
+      msg.buttons[kCompatRecordButtonIndex] = 1;
+    }
     publisher->publish(msg);
     if (state_ == JoystickState::AUTONOMOUS) {
       enable_autonomy_msg.data = true;

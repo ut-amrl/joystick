@@ -5,7 +5,7 @@ Driver code for DXS joystick
 
 1. [glog](https://github.com/google/glog)
 2. [gflags](https://github.com/gflags/gflags)
-3. [Lua5.1](https://www.lua.org/)
+3. [Lua5.2](https://www.lua.org/)
 
 ## ROS2 Dependencies
 
