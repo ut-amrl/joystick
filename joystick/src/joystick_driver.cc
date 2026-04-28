@@ -40,7 +40,7 @@
 #include "std_srvs/srv/trigger.hpp"
 
 DECLARE_int32(v);
-DEFINE_int32(idx, 0, "Joystick index");
+DEFINE_string(idx, "/dev/input/spectrum_dxs", "Joystick index or device path");
 DEFINE_double(
     max_cmd_age, 0.1, "Maximum permissible age of autonomous command");
 
@@ -319,7 +319,7 @@ int main(int argc, char** argv) {
       node_->create_publisher<Bool>("autonomy_arbiter/enabled", 1);
   Joystick joystick;
   if (!joystick.Open(FLAGS_idx)) {
-    fprintf(stderr, "ERROR: Unable to open joystick)!\n");
+    fprintf(stderr, "ERROR: Unable to open joystick '%s'!\n", FLAGS_idx.c_str());
     return(1);
   }
 

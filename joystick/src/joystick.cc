@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <errno.h>
 
 #include <string>
 #include <vector>
@@ -43,6 +44,23 @@ Joystick::Joystick() : MaxAxisVal(32767), MaxAxisValInv(1.0 / MaxAxisVal) {
   fd = -1;
   model = NULL;
   model_size = 0;
+}
+
+bool Joystick::Open(const std::string& dev_or_idx) {
+  char* endptr = nullptr;
+  errno = 0;
+  const long joystick_idx = strtol(dev_or_idx.c_str(), &endptr, 10);
+  const bool idx_is_number = (endptr != dev_or_idx.c_str() &&
+                              *endptr == '\0' &&
+                              errno == 0 &&
+                              joystick_idx >= 0);
+  printf("idx_is_number: %d\n", idx_is_number);
+  if (idx_is_number) {
+    printf("Opening joystick with index: %ld\n", joystick_idx);
+    return Open(static_cast<int>(joystick_idx));
+  }
+  printf("Opening joystick with name: %s\n", dev_or_idx.c_str());
+  return Open(dev_or_idx.c_str());
 }
 
 bool Joystick::Open(const char *dev) {

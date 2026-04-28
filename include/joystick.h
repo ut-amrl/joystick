@@ -45,6 +45,7 @@ class Joystick {
   bool IsOpen() { return (fd != -1); }
   std::string GetName();
 
+  bool Open(const std::string& dev_or_idx);
   bool Open(const char* dev);
   bool Open(int joy_idx);
 
