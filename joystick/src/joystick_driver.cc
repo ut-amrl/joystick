@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <string>
@@ -93,7 +94,11 @@ std::shared_ptr<rclcpp::Node> node_;
 std::string sit_service_name_ = "/sit";
 std::string stand_service_name_ = "/stand";
 bool sitting_ = false;
-bool record_button_compat_pulse_ = false;
+// Number of consecutive frames to hold buttons[kCompatRecordButtonIndex]=1 after
+// a recording toggle.  3 frames @ 60 Hz ≈ 50 ms is enough to survive a brief
+// busy period in the subscriber without risking a double-trigger.
+int record_button_compat_pulse_frames_ = 0;
+constexpr int kCompatPulseFrames = 3;   // 3 frames @ 60 Hz ≈ 50 ms
 constexpr int kCompatRecordButtonIndex = 2;
 
 Twist ZeroTwist() {
@@ -215,13 +220,36 @@ float JoystickValue(float x, float scale) {
 
 void SetManualCommand(const vector<int32_t>& buttons,
                       const vector<float>& axes) {
-  const float kMaxLinearSpeed = 1.6;
+  // Spot rejects |vx| >= 2.0. axis_scale (32768/23638) used to push 1.6 m/s
+  // to ~2.22 m/s at full throw, so every walk command failed.
+  const float kMaxLinearSpeed = 1.6f;
   const float kMaxRotationSpeed = math_util::DegToRad(90);
-  manual_cmd_.linear.x = JoystickValue(axes[CONFIG_x_axis], CONFIG_axis_scale * kMaxLinearSpeed);
+  auto clamp = [](float v, float lim) {
+    return std::max(-lim, std::min(lim, v));
+  };
+
+  // Unbound / failsafe USB dongles report every axis at ±1. Do not drive.
+  bool failsafe = !axes.empty();
+  for (float a : axes) {
+    if (fabs(a) < 0.95f) {
+      failsafe = false;
+      break;
+    }
+  }
+  if (failsafe) {
+    manual_cmd_ = ZeroTwist();
+    return;
+  }
+
+  manual_cmd_.linear.x = clamp(
+      JoystickValue(axes[CONFIG_x_axis], CONFIG_axis_scale * kMaxLinearSpeed),
+      kMaxLinearSpeed);
   // The connection point of the y axis on the controller broke and it returns unstable values.
   // Turn off y-velocity until it is fixed.
   manual_cmd_.linear.y = JoystickValue(axes[CONFIG_y_axis], 0.0f * CONFIG_axis_scale * kMaxLinearSpeed);
-  manual_cmd_.angular.z = JoystickValue(axes[CONFIG_r_axis], CONFIG_axis_scale * kMaxRotationSpeed);
+  manual_cmd_.angular.z = clamp(
+      JoystickValue(axes[CONFIG_r_axis], CONFIG_axis_scale * kMaxRotationSpeed),
+      kMaxRotationSpeed);
 
   if (state_ == JoystickState::MANUAL) {
     const bool button_mode = (CONFIG_sit_button >= 0 && CONFIG_stand_button >= 0);
@@ -229,13 +257,18 @@ void SetManualCommand(const vector<int32_t>& buttons,
 
     bool do_sit = false;
     bool do_stand = false;
+    static int prev_sit_stand = 0;  // -1 stand, 0 mid, +1 sit
 
     if (button_mode) {
       do_sit = buttons[CONFIG_sit_button] != 0;
       do_stand = buttons[CONFIG_stand_button] != 0;
     } else if (axis_mode) {
-      do_sit = axes[CONFIG_sit_stand_axis] > 0;
-      do_stand = axes[CONFIG_sit_stand_axis] < 0;
+      const int now = (axes[CONFIG_sit_stand_axis] > 0.5f) ? 1
+                    : (axes[CONFIG_sit_stand_axis] < -0.5f) ? -1
+                    : 0;
+      do_sit = (now == 1 && prev_sit_stand != 1);
+      do_stand = (now == -1 && prev_sit_stand != -1);
+      prev_sit_stand = now;
     }
 
     if (do_sit || do_stand) {
@@ -287,8 +320,9 @@ void LoggingControls(const vector<int32_t>& buttons) {
     } else {
       printf("Stopped recording.\n");
     }
-    // Emit one-frame pulse for av_recorder compatibility.
-    record_button_compat_pulse_ = true;
+    // Emit a multi-frame pulse for av_recorder compatibility so the signal
+    // survives even when av_recorder's executor is busy with recording callbacks.
+    record_button_compat_pulse_frames_ = kCompatPulseFrames;
     // Sleep(0.5);
   }
 
@@ -296,10 +330,16 @@ void LoggingControls(const vector<int32_t>& buttons) {
   prev_stop_down = stop_down;
 }
 
+// Returns true and decrements the counter while the pulse is active.
+// av_recorder detects only the *rising edge* on buttons[kCompatRecordButtonIndex],
+// so repeating the 1 for several frames is safe — it still triggers exactly one
+// toggle on the subscriber side.
 bool ConsumeRecordButtonCompatPulse() {
-  const bool pulse = record_button_compat_pulse_;
-  record_button_compat_pulse_ = false;
-  return pulse;
+  if (record_button_compat_pulse_frames_ > 0) {
+    record_button_compat_pulse_frames_--;
+    return true;
+  }
+  return false;
 }
 
 int main(int argc, char** argv) {
@@ -346,6 +386,7 @@ int main(int argc, char** argv) {
     if (msg.buttons.size() <= kCompatRecordButtonIndex) {
       msg.buttons.resize(kCompatRecordButtonIndex + 1, 0);
     }
+
     if (ConsumeRecordButtonCompatPulse()) {
       msg.buttons[kCompatRecordButtonIndex] = 1;
     }
