@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(joystick)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -47,5 +49,17 @@ install(TARGETS joystick_node
 install(DIRECTORY include/
   DESTINATION include
 )
+
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(recording_buttons_test test/recording_buttons_test.cc)
+  target_include_directories(recording_buttons_test PRIVATE include)
+  add_test(NAME recording_buttons_test COMMAND recording_buttons_test)
+  add_executable(recording_command_test test/recording_command_test.cc joystick/src/joystick.cc)
+  target_include_directories(recording_command_test PRIVATE include)
+  ament_target_dependencies(recording_command_test rclcpp std_msgs)
+  add_test(NAME recording_command_test COMMAND recording_command_test)
+  set_tests_properties(recording_command_test PROPERTIES TIMEOUT 15)
+endif()
 
 ament_package()

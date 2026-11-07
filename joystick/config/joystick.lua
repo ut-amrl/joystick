@@ -32,7 +32,8 @@
 --     "/depth_registered/right/image "..
 --     "/spot/camera/back/camera_info > /tmp/joystick_rosbag.log 2>&1 &";
 
-record_cmd = "mkdir -p /home/ros/cotnav_ws/data/bags; ros2 bag record -o /home/ros/cotnav_ws/data/bags/$(date +%Y-%m-%d_%H-%M-%S) "..
+-- Legacy reference only; joystick publishes /record. av_recorder/config/recorder.yaml owns recording settings.
+record_cmd = "mkdir -p /data/arthur/bags; ros2 bag record -o /data/arthur/bags/$(date +%Y-%m-%d_%H-%M-%S) "..
     "/status "..
     "/autonomy_arbiter/enabled "..
     "/velodyne_points "..
@@ -57,7 +58,16 @@ record_cmd = "mkdir -p /home/ros/cotnav_ws/data/bags; ros2 bag record -o /home/r
     "/rgb/image_raw "..
     "/rgb/camera_info "..
     "/depth_to_rgb/image_raw "..
-    "/depth_to_rgb/camera_info > /tmp/joystick_rosbag.log 2>&1";
+    "/depth_to_rgb/camera_info "..
+    "/camera/rgb/image_raw/compressed "..
+    "/camera/rgb/camera_info "..
+    "/kinect_scan "..
+    "/phone/gps "..
+    "/phone/gps_heading "..
+    "/memo/plan "..
+    "/memo/status "..
+    "/navigation/mission_status "..
+    "/diagnostics > /tmp/joystick_rosbag.log 2>&1";
 
 Ps4Mapping = {
     manual_button = 4;

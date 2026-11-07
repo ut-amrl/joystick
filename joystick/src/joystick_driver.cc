@@ -94,12 +94,6 @@ std::shared_ptr<rclcpp::Node> node_;
 std::string sit_service_name_ = "/sit";
 std::string stand_service_name_ = "/stand";
 bool sitting_ = false;
-// Number of consecutive frames to hold buttons[kCompatRecordButtonIndex]=1 after
-// a recording toggle.  3 frames @ 60 Hz ≈ 50 ms is enough to survive a brief
-// busy period in the subscriber without risking a double-trigger.
-int record_button_compat_pulse_frames_ = 0;
-constexpr int kCompatPulseFrames = 3;   // 3 frames @ 60 Hz ≈ 50 ms
-constexpr int kCompatRecordButtonIndex = 2;
 
 Twist ZeroTwist() {
   Twist msg;
@@ -297,51 +291,6 @@ void SetManualCommand(const vector<int32_t>& buttons,
   }
 }
 
-void LoggingControls(const vector<int32_t>& buttons) {
-  auto button_down = [&buttons](int idx) -> bool {
-    return idx >= 0 && idx < static_cast<int>(buttons.size()) && buttons[idx] == 1;
-  };
-
-  static bool recording = false;
-  static bool prev_start_down = false;
-  static bool prev_stop_down = false;
-
-  const bool bumper_down = button_down(CONFIG_left_bumper);
-  const bool start_down = button_down(CONFIG_record_start_button);
-  const bool stop_down = button_down(CONFIG_record_stop_button);
-  const bool start_pressed = start_down && !prev_start_down;
-  const bool stop_pressed = stop_down && !prev_stop_down;
-  const bool toggle_pressed = start_pressed || stop_pressed;
-
-  if (bumper_down && toggle_pressed) {
-    recording = !recording;
-    if (recording) {
-      printf("Started recording.\n");
-    } else {
-      printf("Stopped recording.\n");
-    }
-    // Emit a multi-frame pulse for av_recorder compatibility so the signal
-    // survives even when av_recorder's executor is busy with recording callbacks.
-    record_button_compat_pulse_frames_ = kCompatPulseFrames;
-    // Sleep(0.5);
-  }
-
-  prev_start_down = start_down;
-  prev_stop_down = stop_down;
-}
-
-// Returns true and decrements the counter while the pulse is active.
-// av_recorder detects only the *rising edge* on buttons[kCompatRecordButtonIndex],
-// so repeating the 1 for several frames is safe — it still triggers exactly one
-// toggle on the subscriber side.
-bool ConsumeRecordButtonCompatPulse() {
-  if (record_button_compat_pulse_frames_ > 0) {
-    record_button_compat_pulse_frames_--;
-    return true;
-  }
-  return false;
-}
-
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   google::InitGoogleLogging(argv[0]);
@@ -358,6 +307,7 @@ int main(int argc, char** argv) {
   enable_autonomy_publisher_ =
       node_->create_publisher<Bool>("autonomy_arbiter/enabled", 1);
   Joystick joystick;
+  joystick::RecordingControl recording(node_);
   if (!joystick.Open(FLAGS_idx)) {
     fprintf(stderr, "ERROR: Unable to open joystick '%s'!\n", FLAGS_idx.c_str());
     return(1);
@@ -379,17 +329,10 @@ int main(int argc, char** argv) {
     UpdateState(buttons, axes);
     SetManualCommand(buttons, axes);
     PublishCommand();
-    LoggingControls(buttons);
+    recording.Update(buttons, CONFIG_left_bumper, CONFIG_record_start_button, CONFIG_record_stop_button);
     msg.header.stamp = node_->get_clock()->now();
     msg.axes = axes;
     msg.buttons = buttons;
-    if (msg.buttons.size() <= kCompatRecordButtonIndex) {
-      msg.buttons.resize(kCompatRecordButtonIndex + 1, 0);
-    }
-
-    if (ConsumeRecordButtonCompatPulse()) {
-      msg.buttons[kCompatRecordButtonIndex] = 1;
-    }
     publisher->publish(msg);
     if (state_ == JoystickState::AUTONOMOUS) {
       enable_autonomy_msg.data = true;

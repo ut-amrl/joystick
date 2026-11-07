@@ -18,13 +18,27 @@
 //========================================================================
 
 #include <stdint.h>
+#include <memory>
 #include <string>
 #include <vector>
 
 #ifndef JOYSTICK_H
 #define JOYSTICK_H
 
+namespace rclcpp { class Node; }
+
 namespace joystick {
+
+class RecordingControl {
+ public:
+  explicit RecordingControl(std::shared_ptr<rclcpp::Node> node);
+  ~RecordingControl();
+  void Update(const std::vector<int32_t>& buttons, int guard, int start, int stop);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
 
 // Interface to kernel module for Joystick driver.
 // Reference:

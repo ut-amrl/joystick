@@ -33,12 +33,47 @@
 #include <vector>
 
 #include "joystick.h"
+#include "recording_buttons.h"
+#include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/int32.hpp"
 
 using std::string;
 using std::vector;
 
 namespace joystick {
 static const bool kDebug = false;
+
+struct RecordingControl::Impl {
+  std::shared_ptr<rclcpp::Node> node;
+  RecordingButtons buttons;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr command;
+  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr status;
+};
+
+RecordingControl::RecordingControl(std::shared_ptr<rclcpp::Node> node)
+    : impl_(std::make_unique<Impl>()) {
+  impl_->node = node;
+  impl_->command = node->create_publisher<std_msgs::msg::Bool>("/record", rclcpp::QoS(10).reliable());
+  impl_->status = node->create_subscription<std_msgs::msg::Int32>("/recording", 10,
+      [this](std_msgs::msg::Int32::ConstSharedPtr message) {
+        impl_->buttons.SetRecording(message->data == 1);
+      });
+}
+
+RecordingControl::~RecordingControl() = default;
+
+void RecordingControl::Update(const std::vector<int32_t>& buttons, int guard, int start, int stop) {
+  const auto desired = impl_->buttons.Update(buttons, guard, start, stop);
+  if (!desired) return;
+  std_msgs::msg::Bool command;
+  command.data = *desired;
+  impl_->command->publish(command);
+  RCLCPP_INFO(impl_->node->get_logger(), "Requested recording %s", *desired ? "start" : "stop");
+  if (impl_->command->get_subscription_count() == 0) {
+    RCLCPP_WARN(impl_->node->get_logger(), "No /record subscriber; start av_recorder recorder.launch.py");
+  }
+}
 
 Joystick::Joystick() : MaxAxisVal(32767), MaxAxisValInv(1.0 / MaxAxisVal) {
   fd = -1;
